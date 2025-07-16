@@ -1,1 +1,1 @@
-# serguros-project-back
+# seguros-project
