@@ -100,13 +100,12 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'seguros_db',
-        'USER': 'tu_usuario',
-        'PASSWORD': 'tu_contraseña',
+        'USER': 'superuser',
+        'PASSWORD': 'admin25',
         'HOST': 'localhost',
         'PORT': '5432',
     }
 }
-
 
 # Configuración de autenticación
 AUTH_USER_MODEL = 'usuarios.User'
