@@ -120,7 +120,6 @@ DATABASES = {
     }
 }
 
-
 # Configuración de autenticación
 AUTH_USER_MODEL = 'usuarios.User'
 
