@@ -1,6 +1,36 @@
 from rest_framework import serializers
 from usuarios.models import User
 from polizas.models import Poliza, Aseguradora, Ramo, Contratante, Asegurado, ReporteGenerado
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
+
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+
+        # Add custom claims
+        token['rol'] = user.rol
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+
+        return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        # Add extra responses here
+        user = User.objects.get(username=self.user.username)
+        data['username'] = user.username
+        data['email'] = user.email
+        data['rol'] = user.rol
+        data['first_name'] = user.first_name
+        data['last_name'] = user.last_name
+
+        return data
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:

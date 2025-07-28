@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -46,11 +47,23 @@ INSTALLED_APPS = [
     'polizas',
     'reportes',
     'api',
-    
+
     # Aplicaciones de terceros (instalar después)
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
 ]
+
+# Configuración de SimpleJWT
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': True,
+    'UPDATE_LAST_LOGIN': True,
+    'USER_ID_FIELD': 'username',  # Usamos el username como identificador
+'BLACKLIST_AFTER_ROTATION': True,
+    'ROTATE_REFRESH_TOKENS': True,
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -100,8 +113,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'seguros_db',
-        'USER': 'tu_usuario',
-        'PASSWORD': 'tu_contraseña',
+        'USER': 'superuser',
+        'PASSWORD': 'admin25',
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -125,6 +138,7 @@ REST_FRAMEWORK = {
 # Configuración CORS (para desarrollo con Angular)
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:4200",  # Puerto por defecto de Angular
+    "http://localhost:4203",  # Puerto por especifico de Angular
 ]
 
 # Password validation
