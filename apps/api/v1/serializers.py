@@ -4,6 +4,7 @@ from polizas.models import Poliza, Aseguradora, Ramo, Contratante, Asegurado, Re
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework import serializers
 
+from polizas.models import FormaPago
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -62,6 +63,11 @@ class AseguradoSerializer(serializers.ModelSerializer):
         model = Asegurado
         fields = '__all__'
 
+class FormaPagoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FormaPago
+        fields = '__all__'
+
 class PolizaSerializer(serializers.ModelSerializer):
     aseguradora = AseguradoraSerializer()
     ramo = RamoSerializer()
@@ -72,6 +78,7 @@ class PolizaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Poliza
         fields = '__all__'
+        depth = 1
 
 class ReporteSerializer(serializers.ModelSerializer):
     class Meta:

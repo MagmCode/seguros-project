@@ -1,6 +1,6 @@
 from django.db import models
-from core.models import BaseModel
-from usuarios.models import User
+from apps.core.models import BaseModel
+from django.conf import settings
 
 class Aseguradora(BaseModel):
     nombre = models.CharField(max_length=100)
@@ -44,7 +44,7 @@ class Asegurado(BaseModel):
         return self.nombre
     
 class ReporteGenerado(models.Model):
-    usuario = models.ForeignKey(User, on_delete=models.PROTECT)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     fecha_generacion = models.DateTimeField(auto_now_add=True)
     parametros = models.JSONField()  # Almacena los parámetros de búsqueda
     archivo_path = models.CharField(max_length=255)
@@ -68,8 +68,8 @@ class Poliza(BaseModel):
     renovacion = models.CharField(max_length=100)
     contratante = models.ForeignKey(Contratante, on_delete=models.PROTECT)
     asegurado = models.ForeignKey(Asegurado, on_delete=models.PROTECT)
-    creado_por = models.ForeignKey(User, on_delete=models.PROTECT, related_name='polizas_creadas')
-    actualizado_por = models.ForeignKey(User, on_delete=models.PROTECT, related_name='polizas_actualizadas', null=True)
+    creado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='polizas_creadas')
+    actualizado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='polizas_actualizadas', null=True)
 
     def __str__(self):
         return f"{self.numero} - {self.aseguradora.nombre}"

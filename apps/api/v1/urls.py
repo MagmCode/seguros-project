@@ -20,8 +20,30 @@ urlpatterns = [
     path('polizas/', views.PolizaListCreateView.as_view(), name='poliza-list'),
     path('polizas/<int:pk>/', views.PolizaRetrieveUpdateDestroyView.as_view(), name='poliza-detail'),
     path('polizas/proximas-vencer/', views.PolizaProximaVencerList.as_view(), name='poliza-proximas-vencer'),
+    path('polizas/opciones/', views.PolizaOptionsView.as_view(), name='poliza-opciones'),
 
     # Reportes
     path('reportes/generar/', views.GenerarReporteView.as_view(), name='generar-reporte'),
     path('reportes/historial/', views.ReporteHistorialList.as_view(), name='reporte-historial'),
+
+    #  Aseguradoras
+    path('aseguradoras/', views.AseguradoraListCreateView.as_view(), name='aseguradora-list'),
+    path('aseguradoras/<int:pk>/', views.AseguradoraRetrieveUpdateDestroyView.as_view(), name='aseguradora-detail'),
+
+    #  Ramos
+    path('ramos/', views.RamoListCreateView.as_view(), name='ramo-list'),
+    path('ramos/<int:pk>/', views.RamoRetrieveUpdateDestroyView.as_view(), name='ramo-detail'),
+
+    # Contratante
+    path('contratantes/', views.ContratanteListCreateView.as_view(), name='contratante-list'),
+    path('contratantes/<int:pk>/', views.ContratanteRetrieveUpdateDestroyView.as_view(), name='contratante-detail'),
+
+    # Asegurados
+    path('asegurados/', views.AseguradoListCreateView.as_view(), name='asegurado-list'),
+    path('asegurados/<int:pk>/', views.AseguradoRetrieveUpdateDestroyView.as_view(), name='asegurado-detail'),
+
+    # Formas de pago
+    path('formas-pago/', views.FormaPagoListCreateView.as_view(), name='formapago-list'),
+    path('formas-pago/<int:pk>/', views.FormaPagoRetrieveUpdateDestroyView.as_view(), name='formapago-detail'),
+
 ]

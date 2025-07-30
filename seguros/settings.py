@@ -61,7 +61,7 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'UPDATE_LAST_LOGIN': True,
     'USER_ID_FIELD': 'username',  # Usamos el username como identificador
-'BLACKLIST_AFTER_ROTATION': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'ROTATE_REFRESH_TOKENS': True,
 }
 
