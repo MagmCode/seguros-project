@@ -123,11 +123,27 @@ class PolizaListCreateView(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['aseguradora', 'ramo', 'contratante', 'asegurado']
 
+    def perform_create(self, serializer):
+        # Automatically set 'creado_por' to the currently authenticated user
+        if self.request.user.is_authenticated:  # Ensure user is authenticated, though IsAuthenticated permission handles this
+            serializer.save(creado_por=self.request.user)
+        else:
+            # Handle unauthenticated case if necessary, though permission_classes should prevent it
+            # Or raise an exception if it should never happen
+            raise PermissionDenied("Authentication required to create a policy.")
+
 
 class PolizaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Poliza.objects.all()
     serializer_class = PolizaSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def perform_update(self, serializer):
+        # Automatically set 'actualizado_por' to the currently authenticated user for updates
+        if self.request.user.is_authenticated:
+            serializer.save(actualizado_por=self.request.user)
+        else:
+            raise PermissionDenied("Authentication required to update a policy.")
 
 
 class PolizaProximaVencerList(generics.ListAPIView):
