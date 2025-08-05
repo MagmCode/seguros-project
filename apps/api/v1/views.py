@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 # --- REMOVED: from apps.usuarios.models import User
 from django.contrib.auth import get_user_model # ADDED: Import get_user_model
@@ -153,23 +153,42 @@ class PolizaProximaVencerList(generics.ListAPIView):
     filterset_fields = ['aseguradora', 'ramo', 'contratante']
 
     def get_queryset(self):
-        fecha_consulta = self.request.query_params.get('fecha', None)
+        # Get the date parameter from the request.query_params (e.g., ?fecha=YYYY-MM-DD)
+        fecha_str = self.request.query_params.get('fecha', None)
 
-        if fecha_consulta:
-            fecha_limite = timezone.datetime.strptime(fecha_consulta, '%Y-%m-%d').date()
+        if fecha_str:
+            try:
+                # Convert the input string to a date object
+                consult_date = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+            except ValueError:
+                # Handle invalid date format by returning an empty queryset
+                # or raising a DRF exception for clearer error messages.
+                # For an API endpoint, returning an empty queryset on bad input
+                # is less ideal than raising an Http400, but it avoids crashing.
+                from rest_framework.response import Response
+                from rest_framework import status
+                raise PermissionDenied("Formato de fecha inválido. Use YYYY-MM-DD.")
+                # Or you could return an empty queryset if you prefer no error response:
+                # return Poliza.objects.none()
         else:
-            fecha_limite = timezone.now().date() + timedelta(days=30)
+            # If no date is provided, default to current date
+            consult_date = timezone.now().date()
 
-        return Poliza.objects.select_related(
+        # Build the queryset
+        queryset = Poliza.objects.select_related(
             'aseguradora',
             'ramo',
             'contratante',
             'asegurado',
             'forma_pago'
         ).filter(
-            fecha_fin__gte=timezone.now().date(),
-            fecha_fin__lte=fecha_limite
-        ).order_by('fecha_fin')
+            # --- MODIFICATION START ---
+            # Filter where 'renovacion' date is greater than or equal to the consult_date
+            renovacion__gte=consult_date
+            # --- MODIFICATION END ---
+        ).order_by('renovacion') # Always good to order by renovation date
+
+        return queryset
 
 
 class PolizaOptionsView(APIView):
