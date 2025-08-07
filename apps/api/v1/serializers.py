@@ -91,6 +91,11 @@ class PolizaSerializer(serializers.ModelSerializer):
         queryset=FormaPago.objects.all(), source='forma_pago', write_only=True, required=True
     )
 
+    # Campos de trimestres como solo lectura (READ ONLY)
+    i_trimestre = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    ii_trimestre = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    iii_trimestre = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    iv_trimestre = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     class Meta:
         model = Poliza
         fields = [
@@ -113,24 +118,18 @@ class PolizaSerializer(serializers.ModelSerializer):
         forma_pago_name = forma_pago_instance.nombre.lower()
         prima_total = poliza_instance.prima_total
 
-        if 'trimestral' in forma_pago_name:
-            # Si es trimestral, divide el total entre 4
+        if 'anual' in forma_pago_name:
+            # Si es anual, divide el total entre 4
             monto_trimestre = prima_total / 4
             poliza_instance.i_trimestre = monto_trimestre
             poliza_instance.ii_trimestre = monto_trimestre
             poliza_instance.iii_trimestre = monto_trimestre
             poliza_instance.iv_trimestre = monto_trimestre
         elif 'semestral' in forma_pago_name:
-            # Si es semestral, divide el total entre 2 y asigna a 1er y 3er trimestre
+            # Si es semestral, divide el total entre 2 y asigna a 1er y 2do trimestre
             monto_semestre = prima_total / 2
             poliza_instance.i_trimestre = monto_semestre
-            poliza_instance.ii_trimestre = 0
-            poliza_instance.iii_trimestre = monto_semestre
-            poliza_instance.iv_trimestre = 0
-        else:  # 'Anual' o cualquier otro caso por defecto
-            # Si es anual, el pago completo se asigna al primer trimestre
-            poliza_instance.i_trimestre = prima_total
-            poliza_instance.ii_trimestre = 0
+            poliza_instance.ii_trimestre = monto_semestre
             poliza_instance.iii_trimestre = 0
             poliza_instance.iv_trimestre = 0
 
@@ -145,6 +144,7 @@ class PolizaSerializer(serializers.ModelSerializer):
         asegurado_data = validated_data.pop('asegurado')
         forma_pago_instance = validated_data.pop('forma_pago')
 
+        # 1. Obtenemos o creamos las instancias anidadas
         contratante, _ = Contratante.objects.get_or_create(
             documento=contratante_data.get('documento'),
             defaults=contratante_data
@@ -154,15 +154,20 @@ class PolizaSerializer(serializers.ModelSerializer):
             defaults=asegurado_data
         )
 
-        poliza = Poliza.objects.create(
+        # 2. Creamos la instancia de la póliza SIN guardarla todavía
+        poliza = Poliza(
             contratante=contratante,
             asegurado=asegurado,
-            forma_pago=forma_pago_instance,  # <-- Asignamos la instancia aquí
+            forma_pago=forma_pago_instance,
             **validated_data
         )
 
-        # Calculamos los trimestres justo después de crear la póliza
-        return self._calculate_payments(poliza, forma_pago_instance)
+        # 3. Calculamos los pagos de los trimestres y los asignamos a la instancia
+        poliza = self._calculate_payments(poliza, forma_pago_instance)
+
+        # 4. Ahora sí, guardamos la instancia completa en la base de datos
+        poliza.save()
+        return poliza
 
     def update(self, instance, validated_data):
         # Maneja la actualización de campos anidados
