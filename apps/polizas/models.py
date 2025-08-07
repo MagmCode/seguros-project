@@ -61,6 +61,7 @@ class Poliza(BaseModel):
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField()
     vigencia = models.CharField(max_length=50)
+    prima_total = models.DecimalField (max_digits=10, decimal_places=2)
     i_trimestre = models.DecimalField(max_digits=10, decimal_places=2)
     ii_trimestre = models.DecimalField(max_digits=10, decimal_places=2)
     iii_trimestre = models.DecimalField(max_digits=10, decimal_places=2)

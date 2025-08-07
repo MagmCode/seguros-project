@@ -71,24 +71,22 @@ class FormaPagoSerializer(serializers.ModelSerializer):
 
 class PolizaSerializer(serializers.ModelSerializer):
     # Campos de lectura para mostrar el nombre en las respuestas GET.
-    # Usamos `source` para mapearlos a los campos reales del modelo.
     aseguradora_nombre = AseguradoraSerializer(source='aseguradora', read_only=True)
     ramo_nombre = RamoSerializer(source='ramo', read_only=True)
     forma_pago_nombre = serializers.StringRelatedField(source='forma_pago', read_only=True)
 
     # Serializadores anidados para `contratante` y `asegurado`.
-    # Estos permiten la escritura de objetos completos anidados en POST/PUT.
     contratante = ContratanteSerializer()
     asegurado = AseguradoSerializer()
 
     # Campos de escritura para las relaciones que se pasan por ID.
-    # Son `write_only=True` para que no aparezcan en la respuesta GET.
     aseguradora_id = serializers.PrimaryKeyRelatedField(
         queryset=Aseguradora.objects.all(), source='aseguradora', write_only=True, required=True
     )
     ramo_id = serializers.PrimaryKeyRelatedField(
         queryset=Ramo.objects.all(), source='ramo', write_only=True, required=True
     )
+    # Forma de pago se usará para el cálculo, por eso es un campo de entrada.
     forma_pago_id = serializers.PrimaryKeyRelatedField(
         queryset=FormaPago.objects.all(), source='forma_pago', write_only=True, required=True
     )
@@ -97,24 +95,56 @@ class PolizaSerializer(serializers.ModelSerializer):
         model = Poliza
         fields = [
             'id', 'numero', 'fecha_inicio', 'fecha_fin', 'renovacion',
+
+            # Los campos de trimestres son ahora de SÓLO LECTURA.
             'i_trimestre', 'ii_trimestre', 'iii_trimestre', 'iv_trimestre',
 
-            # Campos de escritura para IDs
+            # Campos de entrada de datos
+            'prima_total',  # <-- Campo para el monto total
             'aseguradora_id', 'ramo_id', 'forma_pago_id',
-
-            # Campos de escritura anidados
             'contratante', 'asegurado',
 
             # Campos de lectura para nombres
             'aseguradora_nombre', 'ramo_nombre', 'forma_pago_nombre',
         ]
 
+    # --- MÉTODO PARA EL CÁLCULO DE PAGOS ---
+    def _calculate_payments(self, poliza_instance, forma_pago_instance):
+        forma_pago_name = forma_pago_instance.nombre.lower()
+        prima_total = poliza_instance.prima_total
+
+        if 'trimestral' in forma_pago_name:
+            # Si es trimestral, divide el total entre 4
+            monto_trimestre = prima_total / 4
+            poliza_instance.i_trimestre = monto_trimestre
+            poliza_instance.ii_trimestre = monto_trimestre
+            poliza_instance.iii_trimestre = monto_trimestre
+            poliza_instance.iv_trimestre = monto_trimestre
+        elif 'semestral' in forma_pago_name:
+            # Si es semestral, divide el total entre 2 y asigna a 1er y 3er trimestre
+            monto_semestre = prima_total / 2
+            poliza_instance.i_trimestre = monto_semestre
+            poliza_instance.ii_trimestre = 0
+            poliza_instance.iii_trimestre = monto_semestre
+            poliza_instance.iv_trimestre = 0
+        else:  # 'Anual' o cualquier otro caso por defecto
+            # Si es anual, el pago completo se asigna al primer trimestre
+            poliza_instance.i_trimestre = prima_total
+            poliza_instance.ii_trimestre = 0
+            poliza_instance.iii_trimestre = 0
+            poliza_instance.iv_trimestre = 0
+
+        # Guardamos la póliza con los nuevos valores de trimestre
+        poliza_instance.save()
+        return poliza_instance
+
+    # --- FIN DEL MÉTODO DE CÁLCULO ---
+
     def create(self, validated_data):
-        # Extrae los datos de los objetos anidados
         contratante_data = validated_data.pop('contratante')
         asegurado_data = validated_data.pop('asegurado')
+        forma_pago_instance = validated_data.pop('forma_pago')
 
-        # Crea o busca el Contratante y Asegurado por su campo 'documento'
         contratante, _ = Contratante.objects.get_or_create(
             documento=contratante_data.get('documento'),
             defaults=contratante_data
@@ -124,24 +154,26 @@ class PolizaSerializer(serializers.ModelSerializer):
             defaults=asegurado_data
         )
 
-        # Crea la póliza con las instancias de Contratante y Asegurado
         poliza = Poliza.objects.create(
             contratante=contratante,
             asegurado=asegurado,
+            forma_pago=forma_pago_instance,  # <-- Asignamos la instancia aquí
             **validated_data
         )
-        return poliza
+
+        # Calculamos los trimestres justo después de crear la póliza
+        return self._calculate_payments(poliza, forma_pago_instance)
 
     def update(self, instance, validated_data):
-        # Maneja la actualización de campos anidados si se envían
+        # Maneja la actualización de campos anidados
         contratante_data = validated_data.pop('contratante', None)
         asegurado_data = validated_data.pop('asegurado', None)
+        forma_pago_instance = validated_data.pop('forma_pago', instance.forma_pago)
 
         # Actualiza los campos de la póliza
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        # Actualiza los objetos Contratante y Asegurado si se enviaron datos
         if contratante_data:
             contratante_serializer = ContratanteSerializer(instance.contratante, data=contratante_data, partial=True)
             contratante_serializer.is_valid(raise_exception=True)
@@ -152,7 +184,14 @@ class PolizaSerializer(serializers.ModelSerializer):
             asegurado_serializer.is_valid(raise_exception=True)
             asegurado_serializer.save()
 
+        # Guarda los cambios de la póliza antes de calcular los trimestres
         instance.save()
+        instance.forma_pago = forma_pago_instance  # Asigna la nueva forma de pago si existe
+
+        # Recalcula los trimestres si la forma de pago o el monto total han cambiado
+        if 'prima_total' in validated_data or 'forma_pago' in validated_data:
+            return self._calculate_payments(instance, forma_pago_instance)
+
         return instance
 
 class ReporteSerializer(serializers.ModelSerializer):
