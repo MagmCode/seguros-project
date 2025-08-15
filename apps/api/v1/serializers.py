@@ -105,7 +105,7 @@ class PolizaSerializer(serializers.ModelSerializer):
             'i_trimestre', 'ii_trimestre', 'iii_trimestre', 'iv_trimestre',
 
             # Campos de entrada de datos
-            'prima_total',  # <-- Campo para el monto total
+            'prima_total',  'monto_asegurado',# <-- Campo para el monto total
             'aseguradora_id', 'ramo_id', 'forma_pago_id',
             'contratante', 'asegurado',
 
