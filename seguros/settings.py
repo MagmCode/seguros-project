@@ -173,4 +173,17 @@ USE_TZ = True
 
 
 # ==============================================================================
-# ARCH
+# ARCHIVOS ESTÁTICOS (MODIFICADO PARA WHITENOISE)
+# ==============================================================================
+
+STATIC_URL = 'static/'
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+
+# Directorio donde se recolectarán los estáticos en Render
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_collected')
+
+# Motor de almacenamiento para comprimir y servir estáticos
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Default primary key field type
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
