@@ -146,6 +146,50 @@ class PolizaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
             raise PermissionDenied("Authentication required to update a policy.")
 
 
+# class PolizaProximaVencerList(generics.ListAPIView):
+#     serializer_class = PolizaSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+#     filter_backends = [DjangoFilterBackend]
+#     filterset_fields = ['aseguradora', 'ramo', 'contratante']
+#
+#     def get_queryset(self):
+#         # Get the date parameter from the request.query_params (e.g., ?fecha=YYYY-MM-DD)
+#         fecha_str = self.request.query_params.get('fecha', None)
+#
+#         if fecha_str:
+#             try:
+#                 # Convert the input string to a date object
+#                 consult_date = datetime.strptime(fecha_str, '%Y-%m-%d').date()
+#             except ValueError:
+#                 # Handle invalid date format by returning an empty queryset
+#                 # or raising a DRF exception for clearer error messages.
+#                 # For an API endpoint, returning an empty queryset on bad input
+#                 # is less ideal than raising an Http400, but it avoids crashing.
+#                 from rest_framework.response import Response
+#                 from rest_framework import status
+#                 raise PermissionDenied("Formato de fecha inválido. Use YYYY-MM-DD.")
+#                 # Or you could return an empty queryset if you prefer no error response:
+#                 # return Poliza.objects.none()
+#         else:
+#             # If no date is provided, default to current date
+#             consult_date = timezone.now().date()
+#
+#         # Build the queryset
+#         queryset = Poliza.objects.select_related(
+#             'aseguradora',
+#             'ramo',
+#             'contratante',
+#             'asegurado',
+#             'forma_pago'
+#         ).filter(
+#             # --- MODIFICATION START ---
+#             # Filter where 'renovacion' date is greater than or equal to the consult_date
+#             renovacion__gte=consult_date
+#             # --- MODIFICATION END ---
+#         ).order_by('renovacion') # Always good to order by renovation date
+#
+#         return queryset
+
 class PolizaProximaVencerList(generics.ListAPIView):
     serializer_class = PolizaSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -153,28 +197,29 @@ class PolizaProximaVencerList(generics.ListAPIView):
     filterset_fields = ['aseguradora', 'ramo', 'contratante']
 
     def get_queryset(self):
-        # Get the date parameter from the request.query_params (e.g., ?fecha=YYYY-MM-DD)
+        print("--- INICIO DEBUG PROXIMAS VENCER ---")
+
+        # 1. Ver qué fecha llega exactamente
         fecha_str = self.request.query_params.get('fecha', None)
+        print(f"DEBUG: Fecha string recibida: '{fecha_str}'")
 
         if fecha_str:
             try:
-                # Convert the input string to a date object
                 consult_date = datetime.strptime(fecha_str, '%Y-%m-%d').date()
             except ValueError:
-                # Handle invalid date format by returning an empty queryset
-                # or raising a DRF exception for clearer error messages.
-                # For an API endpoint, returning an empty queryset on bad input
-                # is less ideal than raising an Http400, but it avoids crashing.
-                from rest_framework.response import Response
-                from rest_framework import status
+                print("DEBUG: Error de formato de fecha")
+                from rest_framework.exceptions import PermissionDenied
                 raise PermissionDenied("Formato de fecha inválido. Use YYYY-MM-DD.")
-                # Or you could return an empty queryset if you prefer no error response:
-                # return Poliza.objects.none()
         else:
-            # If no date is provided, default to current date
             consult_date = timezone.now().date()
 
-        # Build the queryset
+        print(f"DEBUG: Fecha usada para filtro (consult_date): {consult_date}")
+
+        # 2. Ver cuántas pólizas hay en TOTAL antes de filtrar
+        total_polizas = Poliza.objects.count()
+        print(f"DEBUG: Total de pólizas en la BD: {total_polizas}")
+
+        # 3. Construir la consulta
         queryset = Poliza.objects.select_related(
             'aseguradora',
             'ramo',
@@ -182,14 +227,18 @@ class PolizaProximaVencerList(generics.ListAPIView):
             'asegurado',
             'forma_pago'
         ).filter(
-            # --- MODIFICATION START ---
-            # Filter where 'renovacion' date is greater than or equal to the consult_date
             renovacion__gte=consult_date
-            # --- MODIFICATION END ---
-        ).order_by('renovacion') # Always good to order by renovation date
+        ).order_by('renovacion')
 
+        # 4. IMPRIMIR EL SQL GENERADO (Esto nos dirá la verdad absoluta)
+        print(f"DEBUG: SQL Generado: {queryset.query}")
+
+        # 5. Ver cuántas encontró
+        cantidad = queryset.count()
+        print(f"DEBUG: Pólizas encontradas tras el filtro: {cantidad}")
+
+        print("--- FIN DEBUG ---")
         return queryset
-
 
 class PolizaOptionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
