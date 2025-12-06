@@ -7,6 +7,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import timedelta, datetime
+import openpyxl
+from django.http import HttpResponse
+from django.db.models import Q
 
 # --- REMOVED: from apps.usuarios.models import User
 from django.contrib.auth import get_user_model # ADDED: Import get_user_model
@@ -65,6 +68,17 @@ class UserProfileView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+    def patch(self, request):
+        """Permite al usuario autenticado actualizar sus propios datos"""
+        user = request.user
+        # partial=True permite actualizar solo algunos campos sin enviar todos
+        serializer = UserSerializer(user, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserLogoutView(APIView):
@@ -339,3 +353,89 @@ class FormaPagoRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = FormaPago.objects.all()
     serializer_class = FormaPagoSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+# --- Vistas para el Módulo de Reportes ---
+
+class PolizaReporteFilterMixin:
+    """
+    Mixin para reutilizar la lógica de filtrado entre la vista de lista y la de Excel.
+    """
+    def get_filtered_queryset(self):
+        queryset = Poliza.objects.select_related(
+            'aseguradora', 'ramo', 'contratante', 'asegurado', 'forma_pago'
+        ).all()
+
+        # Obtener parámetros
+        fecha_desde = self.request.query_params.get('fecha_desde')
+        fecha_hasta = self.request.query_params.get('fecha_hasta')
+        aseguradora_id = self.request.query_params.get('aseguradora')
+        contratante_id = self.request.query_params.get('contratante')
+        asegurado_id = self.request.query_params.get('asegurado')
+
+        # Filtro por rango de fechas (usando fecha_inicio de la póliza)
+        if fecha_desde and fecha_hasta:
+            try:
+                f_inicio = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+                f_fin = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+                queryset = queryset.filter(fecha_inicio__range=[f_inicio, f_fin])
+            except ValueError:
+                pass # Si el formato es incorrecto, ignoramos el filtro
+
+        # Filtros por relaciones (IDs)
+        if aseguradora_id:
+            queryset = queryset.filter(aseguradora_id=aseguradora_id)
+        if contratante_id:
+            queryset = queryset.filter(contratante_id=contratante_id)
+        if asegurado_id:
+            queryset = queryset.filter(asegurado_id=asegurado_id)
+
+        return queryset.order_by('fecha_inicio')
+
+class PolizaReporteListView(generics.ListAPIView, PolizaReporteFilterMixin):
+    serializer_class = PolizaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return self.get_filtered_queryset()
+
+class ExportarPolizasExcelView(APIView, PolizaReporteFilterMixin):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        queryset = self.get_filtered_queryset()
+
+        # Crear el libro de Excel
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = 'attachment; filename="reporte_polizas.xlsx"'
+
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = 'Pólizas'
+
+        # Cabeceras
+        columns = [
+            'Nro Póliza', 'Aseguradora', 'Ramo', 'Forma Pago',
+            'Contratante', 'Asegurado', 'Fecha Inicio', 'Fecha Fin',
+            'Prima Total', 'Renovación'
+        ]
+        worksheet.append(columns)
+
+        # Filas
+        for poliza in queryset:
+            worksheet.append([
+                poliza.numero,
+                poliza.aseguradora.nombre,
+                poliza.ramo.nombre,
+                poliza.forma_pago.nombre if poliza.forma_pago else '-',
+                poliza.contratante.nombre,
+                poliza.asegurado.nombre,
+                poliza.fecha_inicio,
+                poliza.fecha_fin,
+                poliza.prima_total,
+                poliza.renovacion
+            ])
+
+        workbook.save(response)
+        return response

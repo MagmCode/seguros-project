@@ -26,6 +26,10 @@ urlpatterns = [
     path('reportes/generar/', views.GenerarReporteView.as_view(), name='generar-reporte'),
     path('reportes/historial/', views.ReporteHistorialList.as_view(), name='reporte-historial'),
 
+# Nuevos endpoints para el reporte
+    path('reportes/consulta/', views.PolizaReporteListView.as_view(), name='reporte-consulta'),
+    path('reportes/exportar-excel/', views.ExportarPolizasExcelView.as_view(), name='reporte-excel'),
+
     #  Aseguradoras
     path('aseguradoras/', views.AseguradoraListCreateView.as_view(), name='aseguradora-list'),
     path('aseguradoras/<int:pk>/', views.AseguradoraRetrieveUpdateDestroyView.as_view(), name='aseguradora-detail'),

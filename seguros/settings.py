@@ -114,18 +114,6 @@ DATABASES = {
     )
 }
 
-# Si no hay DATABASE_URL (estás en local), usa tu configuración original
-if not os.environ.get('DATABASE_URL'):
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'seguros_db',
-            'USER': 'superuser',
-            'PASSWORD': 'admin25',
-            'HOST': 'localhost',
-            'PORT': '5432',
-        }
-    }
 
 # Configuración de autenticación
 AUTH_USER_MODEL = 'usuarios.User'
