@@ -44,6 +44,14 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # create_user se encarga de hashear la contraseña correctamente
         password = validated_data.pop('password', None)
+
+        # --- CORRECCIÓN ---
+        # Si el rol es 'admin', activamos is_staff para que tenga permisos en las vistas protegidas
+        if validated_data.get('rol') == 'admin':
+            validated_data['is_staff'] = True
+        else:
+            validated_data['is_staff'] = False
+
         user = User.objects.create_user(**validated_data)
         if password:
             user.set_password(password)
@@ -53,6 +61,15 @@ class UserSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         # Lógica para actualizar usuario, incluyendo contraseña si se envía
         password = validated_data.pop('password', None)
+
+        # --- CORRECCIÓN ---
+        # Si se actualiza el rol, actualizamos también el permiso is_staff
+        if 'rol' in validated_data:
+            if validated_data['rol'] == 'admin':
+                instance.is_staff = True
+            else:
+                instance.is_staff = False
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
