@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-# Importa tus otros modelos si es necesario
+# Importa tus otros modelos
 from polizas.models import Poliza, Aseguradora, Ramo, Contratante, Asegurado, FormaPago, ReporteGenerado
 
 User = get_user_model()
@@ -20,7 +20,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Respuesta personalizada al hacer login
         data['username'] = self.user.username
         data['email'] = self.user.email
         data['rol'] = self.user.rol
@@ -32,21 +31,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        # CORRECCIÓN: Agregado 'password' a la lista de campos
         fields = ['id', 'username', 'password', 'email', 'rol', 'is_active', 'first_name', 'last_name', 'telefono']
         extra_kwargs = {
             'password': {'write_only': True},
-            # Esto asegura que no se devuelva en la respuesta, pero sí se acepte en la creación
-            'first_name': {'required': True},  # Opcional: hacer obligatorios otros campos
+            'first_name': {'required': True},
             'email': {'required': False}
         }
 
     def create(self, validated_data):
-        # create_user se encarga de hashear la contraseña correctamente
         password = validated_data.pop('password', None)
 
-        # --- CORRECCIÓN ---
-        # Si el rol es 'admin', activamos is_staff para que tenga permisos en las vistas protegidas
+        # Si el rol es 'admin', activamos is_staff
         if validated_data.get('rol') == 'admin':
             validated_data['is_staff'] = True
         else:
@@ -59,11 +54,9 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        # Lógica para actualizar usuario, incluyendo contraseña si se envía
         password = validated_data.pop('password', None)
 
-        # --- CORRECCIÓN ---
-        # Si se actualiza el rol, actualizamos también el permiso is_staff
+        # Actualizamos permisos si cambia el rol
         if 'rol' in validated_data:
             if validated_data['rol'] == 'admin':
                 instance.is_staff = True
@@ -80,7 +73,7 @@ class UserSerializer(serializers.ModelSerializer):
         return instance
 
 
-# ... (Resto de tus serializadores: Aseguradora, Ramo, etc. se mantienen igual) ...
+# --- Serializadores Auxiliares ---
 class AseguradoraSerializer(serializers.ModelSerializer):
     class Meta:
         model = Aseguradora
@@ -111,6 +104,7 @@ class FormaPagoSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+# --- SERIALIZADOR PRINCIPAL DE PÓLIZA ---
 class PolizaSerializer(serializers.ModelSerializer):
     aseguradora_nombre = AseguradoraSerializer(source='aseguradora', read_only=True)
     ramo_nombre = RamoSerializer(source='ramo', read_only=True)
@@ -147,7 +141,8 @@ class PolizaSerializer(serializers.ModelSerializer):
 
     def _calculate_payments(self, poliza_instance, forma_pago_instance):
         forma_pago_name = forma_pago_instance.nombre.lower()
-        prima_total = poliza_instance.prima_total
+        # Aseguramos conversión a float/decimal
+        prima_total = float(poliza_instance.prima_total)
 
         if 'semestral' in forma_pago_name:
             monto_cuota = prima_total / 2
@@ -169,15 +164,24 @@ class PolizaSerializer(serializers.ModelSerializer):
         asegurado_data = validated_data.pop('asegurado')
         forma_pago_instance = validated_data.pop('forma_pago')
 
-        contratante, _ = Contratante.objects.get_or_create(
-            documento=contratante_data.get('documento'),
-            defaults=contratante_data
-        )
-        asegurado, _ = Asegurado.objects.get_or_create(
-            documento=asegurado_data.get('documento'),
-            defaults=asegurado_data
-        )
+        # --- MODIFICACIÓN CLAVE AQUÍ ---
+        # Usamos filter().first() en lugar de get_or_create() para evitar el error de duplicados
 
+        # 1. Contratante
+        contratante_qs = Contratante.objects.filter(documento=contratante_data.get('documento'))
+        if contratante_qs.exists():
+            contratante = contratante_qs.first()  # Toma el primero si hay duplicados
+        else:
+            contratante = Contratante.objects.create(**contratante_data)
+
+        # 2. Asegurado
+        asegurado_qs = Asegurado.objects.filter(documento=asegurado_data.get('documento'))
+        if asegurado_qs.exists():
+            asegurado = asegurado_qs.first()  # Toma el primero si hay duplicados
+        else:
+            asegurado = Asegurado.objects.create(**asegurado_data)
+
+        # 3. Crear Póliza
         poliza = Poliza(
             contratante=contratante,
             asegurado=asegurado,
@@ -199,13 +203,13 @@ class PolizaSerializer(serializers.ModelSerializer):
 
         if contratante_data:
             contratante_serializer = ContratanteSerializer(instance.contratante, data=contratante_data, partial=True)
-            contratante_serializer.is_valid(raise_exception=True)
-            contratante_serializer.save()
+            if contratante_serializer.is_valid(raise_exception=True):
+                contratante_serializer.save()
 
         if asegurado_data:
             asegurado_serializer = AseguradoSerializer(instance.asegurado, data=asegurado_data, partial=True)
-            asegurado_serializer.is_valid(raise_exception=True)
-            asegurado_serializer.save()
+            if asegurado_serializer.is_valid(raise_exception=True):
+                asegurado_serializer.save()
 
         if 'prima_total' in validated_data or 'forma_pago' in validated_data:
             instance.forma_pago = forma_pago_instance
