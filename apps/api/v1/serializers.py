@@ -2,17 +2,18 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-# Importa tus otros modelos
+# Importa tus modelos
 from polizas.models import Poliza, Aseguradora, Ramo, Contratante, Asegurado, FormaPago, ReporteGenerado
 
 User = get_user_model()
 
 
+# ... (CustomTokenObtainPairSerializer y UserSerializer se mantienen IGUAL) ...
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        # Claims personalizados
         token['rol'] = user.rol
         token['first_name'] = user.first_name
         token['last_name'] = user.last_name
@@ -40,13 +41,10 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
-
-        # Si el rol es 'admin', activamos is_staff
         if validated_data.get('rol') == 'admin':
             validated_data['is_staff'] = True
         else:
             validated_data['is_staff'] = False
-
         user = User.objects.create_user(**validated_data)
         if password:
             user.set_password(password)
@@ -55,25 +53,21 @@ class UserSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
-
-        # Actualizamos permisos si cambia el rol
         if 'rol' in validated_data:
             if validated_data['rol'] == 'admin':
                 instance.is_staff = True
             else:
                 instance.is_staff = False
-
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-
         if password:
             instance.set_password(password)
-
         instance.save()
         return instance
 
 
-# --- Serializadores Auxiliares ---
+# --- Serializadores Auxiliares (Se mantienen IGUAL) ---
+
 class AseguradoraSerializer(serializers.ModelSerializer):
     class Meta:
         model = Aseguradora
@@ -104,7 +98,7 @@ class FormaPagoSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-# --- SERIALIZADOR PRINCIPAL DE PÓLIZA ---
+# --- SERIALIZADOR PRINCIPAL DE PÓLIZA (MODIFICADO) ---
 class PolizaSerializer(serializers.ModelSerializer):
     aseguradora_nombre = AseguradoraSerializer(source='aseguradora', read_only=True)
     ramo_nombre = RamoSerializer(source='ramo', read_only=True)
@@ -133,7 +127,7 @@ class PolizaSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'numero', 'fecha_inicio', 'fecha_fin', 'renovacion',
             'i_trimestre', 'ii_trimestre', 'iii_trimestre', 'iv_trimestre',
-            'prima_total',
+            'prima_total', 'monto_asegurado',  # Aseguramos que monto_asegurado esté en fields
             'aseguradora_id', 'ramo_id', 'forma_pago_id',
             'contratante', 'asegurado',
             'aseguradora_nombre', 'ramo_nombre', 'forma_pago_nombre',
@@ -141,7 +135,6 @@ class PolizaSerializer(serializers.ModelSerializer):
 
     def _calculate_payments(self, poliza_instance, forma_pago_instance):
         forma_pago_name = forma_pago_instance.nombre.lower()
-        # Aseguramos conversión a float/decimal
         prima_total = float(poliza_instance.prima_total)
 
         if 'semestral' in forma_pago_name:
@@ -164,36 +157,32 @@ class PolizaSerializer(serializers.ModelSerializer):
         asegurado_data = validated_data.pop('asegurado')
         forma_pago_instance = validated_data.pop('forma_pago')
 
-        # --- MODIFICACIÓN CLAVE AQUÍ ---
-        # Usamos filter().first() en lugar de get_or_create() para evitar el error de duplicados
-
-        # 1. Contratante
+        # Manejo robusto de Contratante/Asegurado
         contratante_qs = Contratante.objects.filter(documento=contratante_data.get('documento'))
-        if contratante_qs.exists():
-            contratante = contratante_qs.first()  # Toma el primero si hay duplicados
-        else:
-            contratante = Contratante.objects.create(**contratante_data)
+        contratante = contratante_qs.first() if contratante_qs.exists() else Contratante.objects.create(
+            **contratante_data)
 
-        # 2. Asegurado
         asegurado_qs = Asegurado.objects.filter(documento=asegurado_data.get('documento'))
-        if asegurado_qs.exists():
-            asegurado = asegurado_qs.first()  # Toma el primero si hay duplicados
-        else:
-            asegurado = Asegurado.objects.create(**asegurado_data)
+        asegurado = asegurado_qs.first() if asegurado_qs.exists() else Asegurado.objects.create(**asegurado_data)
 
-        # 3. Crear Póliza
+        # 1. Creamos la instancia Poliza
         poliza = Poliza(
             contratante=contratante,
             asegurado=asegurado,
             forma_pago=forma_pago_instance,
+            # 2. AÑADIMOS TODOS LOS CAMPOS RESTANTES A LA INSTANCIA ANTES DE CALCULAR/GUARDAR
             **validated_data
         )
 
+        # 3. Calculamos trimestres
         poliza = self._calculate_payments(poliza, forma_pago_instance)
+
+        # 4. Guardamos
         poliza.save()
         return poliza
 
     def update(self, instance, validated_data):
+        # ... (La lógica de update se mantiene igual)
         contratante_data = validated_data.pop('contratante', None)
         asegurado_data = validated_data.pop('asegurado', None)
         forma_pago_instance = validated_data.pop('forma_pago', instance.forma_pago)
