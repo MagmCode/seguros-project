@@ -1,27 +1,40 @@
 import os
 import django
 
-# CAMBIA 'seguros' POR EL NOMBRE DE TU CARPETA DE PROYECTO (donde está settings.py)
+# Ajusta 'seguros' al nombre real de tu carpeta de proyecto
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "seguros.settings")
 django.setup()
 
-from polizas.models import Contratante  # Asegúrate que el modelo es Contratante
+# Importamos AMBOS modelos
+from polizas.models import Contratante, Poliza
 
 
 def eliminar_duplicados():
     target_doc = 'J-98765432-1'
-    # Buscamos todos los registros con ese documento
-    registros = Contratante.objects.filter(documento=target_doc)
 
-    count = registros.count()
-    if count > 1:
-        print(f"Encontrados {count} registros duplicados para {target_doc}. Borrando...")
-        # Borramos TODOS para asegurar que la tabla quede limpia y la migración pase.
-        # Luego tu script 'create_test_users.py' lo volverá a crear limpio.
-        registros.delete()
-        print("Registros eliminados con éxito.")
+    # 1. Identificar los contratantes duplicados
+    contratantes_duplicados = Contratante.objects.filter(documento=target_doc)
+    count = contratantes_duplicados.count()
+
+    if count > 0:
+        print(f"Encontrados {count} contratantes duplicados para {target_doc}.")
+
+        # 2. Buscar las Pólizas asociadas a esos contratantes y borrarlas primero
+        # Esto elimina el bloqueo del ProtectedError
+        polizas_asociadas = Poliza.objects.filter(contratante__in=contratantes_duplicados)
+        polizas_count = polizas_asociadas.count()
+
+        if polizas_count > 0:
+            print(f"Borrando {polizas_count} pólizas asociadas para liberar al contratante...")
+            polizas_asociadas.delete()
+
+        # 3. Ahora sí, borrar los contratantes
+        print("Borrando contratantes...")
+        contratantes_duplicados.delete()
+        print("¡Limpieza completada con éxito!")
+
     else:
-        print("No se encontraron duplicados o el registro es único.")
+        print("No se encontraron duplicados.")
 
 
 if __name__ == "__main__":
